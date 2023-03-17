@@ -1,313 +1,466 @@
-//CLOSURES - anonymous functions you can save in a variable or pass as arguments to other functions
-//unlike functions closures can capture values from scope in which they are defined
-//closures dont usually require us to annotate the types of input parameters nor the type of return value like functions
+//Concurrent Programming
 
-//closures are not exactly functions ...they can be passed around as parameters, variables...or even functions
+//Using Threads to Run Code Simultaneously
 
-//even though we are allowed to not specify data types for input parameters...its also NOT ALLOWED to have closures work on parameters with different datatypes in same program
-//i.e. the first type passed in the closure as input will become the concrete type of the closure
-
-// fn  add_one_v1   (x: u32) -> u32 { x + 1 }
-// let add_one_v2 = |x: u32| -> u32 { x + 1 };
-// let add_one_v3 = |x|             { x + 1 };
-// let add_one_v4 = |x|               x + 1  ;
+///In most current operating systems, an executed program’s code is run in a process, and the operating system will manage multiple processes at once. 
+/// Within a program, you can also have independent parts that run simultaneously. 
+/// The features that run these independent parts are called threads. 
+/// For example, a web server could have multiple threads so that it could respond to more than one request at the same time.
 
 
-#[derive(Debug, PartialEq, Copy, Clone)]
-enum ShirtColor {
-    Red, 
-    Blue,
-}
+//Because threads can run simultaneously, there’s no inherent guarantee about the order in which parts of your code on different threads will run. 
+//This can lead to problems, such as:
 
-struct Inventory {
-    shirts: Vec<ShirtColor>,
-}
+//1 - Race conditions, where threads are accessing data or resources in an inconsistent order
+//2 - Deadlocks, where two threads are waiting for each other, preventing both threads from continuing
+//3 - Bugs that happen only in certain situations and are hard to reproduce and fix reliably
 
-impl Inventory {
-    fn giveaway(&self, user_preference: Option<ShirtColor>) -> ShirtColor {
-        user_preference.unwrap_or_else(|| self.most_stocked())      //we used most_stocked() method inside the giveaway method ...hence it is a closure
-    }
+//-------------------------------------------------------------------------------------
 
-    fn most_stocked(&self) -> ShirtColor {
-        let mut num_red = 0;
-        let mut num_blue = 0;
+//Creating a New Thread with spawn
 
-        for color in &self.shirts {
-            match color {
-                ShirtColor::Red => num_red += 1,
-                ShirtColor::Blue => num_blue += 1,
-            }
-        }
+//To create a new thread, we call the thread::spawn function and pass it a closure (we talked about closures in Chapter 13) containing the code we want to run in the new thread.
 
-        if num_red > num_blue {
-            ShirtColor::Red
-        } else {
-            ShirtColor::Blue
-        }
-    }
-}
+//thread::sleep(Duration::from_millis(1));
+//we can use the statement above in order to make our thread sleep for a certain amout of time
+
+use std::thread;
+use std::time::Duration;
 
 fn main() {
-    
-    let store = Inventory {
-        shirts: vec![ShirtColor::Blue, ShirtColor::Red, ShirtColor::Blue],
-    };
+    thread::spawn(|| {                                           // we spawned a thread and put the code for the thread inside a closure
+        for i in 1..10 {
+            println!("hi number {} from the spawned thread!", i);
+            thread::sleep(Duration::from_millis(1));               //with this we can sleep and pause the exection of out code for a certain amount of time
+        }
+    });
 
-    let user_pref1 = Some(ShirtColor::Red);
-    let giveaway1 = store.giveaway(user_pref1);
-    println!(
-        "The user with preference {:?} gets {:?}",
-        user_pref1, giveaway1
-    );
-
-    let user_pref2 = None;
-    let giveaway2 = store.giveaway(user_pref2);
-    println!(
-        "The user with preference {:?} gets {:?}",
-        user_pref2, giveaway2
-    );
-
+    for i in 1..5 {
+        println!("hi number {} from the main thread!", i);
+        thread::sleep(Duration::from_millis(1));
+    }
 }
 
+//OUTPUT IS ___
+
+// hi number 1 from the main thread!
+// hi number 1 from the spawned thread!
+// hi number 2 from the main thread!
+// hi number 2 from the spawned thread!
+// hi number 3 from the main thread!
+// hi number 3 from the spawned thread!
+// hi number 4 from the main thread!
+// hi number 4 from the spawned thread!
+
+//The calls to thread::sleep force a thread to stop its execution for a short duration, allowing a different thread to run. 
+//The threads will probably take turns, but that isn’t guaranteed: it depends on how your operating system schedules the threads. 
+//In this run, the main thread printed first, even though the print statement from the spawned thread appears first in the code. 
 
 
+//The code above not only stops the spawned thread prematurely most of the time due to the main thread ending, 
+//but because there is no guarantee on the order in which threads run, we also can’t guarantee that the spawned thread will get to run at all!
 
-//instead of calling closures again and again....it is better that we put the input and the losure applied on it inside a struct
-//but for doing this we need to use generics
+//We can fix the problem of the spawned thread not running or ending prematurely by saving the return value of thread::spawn in a variable. 
+//The return type of thread::spawn is JoinHandle. A JoinHandle is an owned value that, when we call the join method on it, will wait for its thread to finish.
 
-
-//we can also bind a variable to a closure definition and then we can later call the closure using the variable name
-// let list = vec![1, 2, 3];
-// println!("Before defining closure: {:?}", list);
-
-// let only_borrows = || println!("From closure: {:?}", list);
-
-// println!("Before calling closure: {:?}", list);
-// only_borrows();
-// println!("After calling closure: {:?}", list);
-
-
-//Output
-// Before defining closure: [1, 2, 3]
-// Before calling closure: [1, 2, 3]
-// From closure: [1, 2, 3]
-// After calling closure: [1, 2, 3]
-
-//----------------------------------------------------
-
-//now we can take a mutable closure so can it can perform update and change operations
-
-// let mut list = vec![1, 2, 3];
-// println!("Before defining closure: {:?}", list);
-
-// let mut borrows_mutably = || list.push(7);
-
-// borrows_mutably();
-// println!("After calling closure: {:?}", list);
-
-//OUTPUT
-// Before defining closure: [1, 2, 3]
-// After calling closure: [1, 2, 3, 7]
-
-//--------------------------------------------------------
-
-//if we want our closure to take the ownership even though its not required....we can use the 'move' keyword
-//This technique is mostly useful when passing a closure to a new thread to move the data so that it’s owned by the new thread.
-
-
-// use std::thread;
-
-// fn main() {
-//     let list = vec![1, 2, 3];
-//     println!("Before defining closure: {:?}", list);
-
-//     thread::spawn(move || println!("From thread: {:?}", list))
-//         .join()
-//         .unwrap();
-// }
-
-//here we spawn a new thread, to give it a closure...
-///closure body prints
-
-//now we cannot use 'list' to print or call our list because the 'list' name has gone out of scope after the closure took ownership of our list with the move method.
-
-
-//--------------------------------------------------------------------
-
-//after the closure has taken the ownership of a value:
-/// the body of the closure decides what to do of the borrowed value
-/// 1 - move the captured value out of closure
-/// 2 - mutate the captured value
-/// 3 - neither move or mutate and do nothing
-/// 
-/// 
-/// 
-
-///the way closures captures and handles values affects which traits the closure implements....
-/// the traits which closures impplements:
-/// 1 - FnOnce - applies to closures that can be called once. a closure that moves captured values OUT OF THE BODY will only implement FnOnce and none of the other Fn traits, because it can be only called once
-/// 2 - FnMut - applies to closures which mutate the captured values instead of making them move out...might be called more than once
-/// 3 - Fn - capture and mutate nothing from or to the environment...can be called more than once
-
-
-
-//lets say we have a program which has a rectangle and orders the list acoording to the width
-// #[derive(Debug)]
-// struct Rectangle {
-//     width: u32,
-//     height: u32,
-// }
-
-// fn main() {
-//     let mut list = [
-//         Rectangle { width: 10, height: 1 },
-//         Rectangle { width: 3, height: 5 },
-//         Rectangle { width: 7, height: 12 },
-//     ];
-
-//     list.sort_by_key(|r| r.width);
-//     println!("{:#?}", list);
-// }
-
-///now in sort_by_key() method .....we give an r as parameter and it will have to return the result according to r.width
-/// and it calls FnMut closure mutliple times...once for each item in slice
-/// 
-/// 
-/// ///lets say we have another implementATION OF THE CLOSURE IN THE sort_by_key() method
-
-// let mut sort_operations = vec![];
-// let value = String::from("by key called");
-
-// list.sort_by_key(|r| {
-//     sort_operations.push(value);
-//     r.width
-// });
-// println!("{:#?}", list);
-
-///here we are seeing that we dont know how many times FnMut is being called by the sort_by_key() function 
-/// hence here we try to count it by adding a value String from the closure's environment in a specific vector.....IT DOESNT WORK
-//DOESNT WORK - because - the ownership of the String gets moved from 'value' to the sort_operations.push() method and the 'value' will go out of scope
-//now this tells us that this closure could only be called once because after second time...the value will get moved out of scope
-
-//hence this closure implements FnOnce even though without the ownership operations this would run FnMut mutiple times
-
-//hence to correct this we need to avoid moving the value inside the method()
-//instead of doing the above, we can simply take in a counter and increase it by one at each step
-
-
-list.sort_by_key(|r| {
-    num_sort_operations += 1;  /// we can do this and so the problem of copying value inside the closure environment would be avoided
-    r.width
+let handle = thread::spawn(|| {                 //we stored the return of thread::spawn inside a variable
+    for i in 1..10 {
+        println!("hi number {} from the spawned thread!", i);
+        thread::sleep(Duration::from_millis(1));
+    }
 });
 
+for i in 1..5 {
+    println!("hi number {} from the main thread!", i);
+    thread::sleep(Duration::from_millis(1));
+}
 
-//----------------------------------------------------------------------------
+handle.join().unwrap();                 //now join() method waits for its thread to finish......we used unwrap() because join() method returns a result and thus can return an Err variant
 
-//ITERATORS
+//The two threads continue alternating, but the main thread waits because of the call to handle.join() and does not end until the spawned thread is finished.
 
-//helps us in iterating over each item in a groupp of items
+//handle.join().unwrap(); ...............if we would have moved this statement before the for loop in 'main'
+//then that would have let the thread run completely and then moved on to the loop in the next line 
+//This way we could have run the thread we spawned first....
 
-//In rust iterators dont run until we call methods that consume the iterator to use it
+
+//=============================================================
+
+//Using move Closures with Threads
+
+//We'll often use the move keyword with closures passed to thread::spawn 
+//because the closure will then take ownership of the values it uses from the environment, 
+//thus transferring ownership of those values from one thread to another.
+
+//---------------------------------------------------
+
+//notice that in the closure ....we are not using any value from the 'main' part
+
+use std::thread;
 
 fn main() {
-    let v1 = vec![1, 2, 3];
+    let v = vec![1, 2, 3];
 
-    let v1_iter = v1.iter();
+    let handle = thread::spawn(|| {
+        println!("Here's a vector: {:?}", v);
+    });
+
+    handle.join().unwrap();
+}
+
+//This code will not compile because we are taking 'v' which we declared outside the spawn() inside the closure....
+//in order to take in the data outside...the spawn() function closure would require to capture the data from the outside....
+//in the above code we captured the vector 'v' but the code still didnt run....WHY?
+
+/// AS println! only requires the reference of 'v' the closure tries to borrow 'v' 
+/// BUT THE PROBLEM - Rust can’t tell how long the spawned thread will run, so it doesn’t know if the reference to v will always be valid.
+
+//By adding the move keyword before the closure, we force the closure to take ownership of the values it’s using rather than allowing Rust to infer that it should borrow the values.
+
+use std::thread;
+
+fn main() {
+    let v = vec![1, 2, 3];
+
+    let handle = thread::spawn(move || {            //we added 'mpve' which made the thread to take the ownership of the vector 'v' that we created.....
+        println!("Here's a vector: {:?}", v);
+    });
+
+    handle.join().unwrap();
+}
+
+//------------------------------------------------------------------
+
+//Using MESSAGE PASSING to Transfer Data Between Threads
+
+//To accomplish message-sending concurrency, Rust's standard library provides an implementation of channels. 
+//A channel is a general programming concept by which data is sent from one thread to another.
+
+//You can imagine a channel in programming as being like a directional channel of water, such as a stream or a river. 
+//If you put something like a rubber duck into a river, it will travel downstream to the end of the waterway.
+
+//A channel has two haves: a transmitter and a receiver.
+//One part of your code calls methods on the transmitter with the data you want to send, and another part checks the receiving end for arriving messages. 
+//A channel is said to be closed if either the transmitter or receiver half is dropped.
+
+
+//this is how we create a CHANNEL
+use std::sync::mpsc  ;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+}
+
+//mpsc stands for multiple producer, single consumer. 
+//the way Rust’s standard library implements channels means a channel can have multiple sending ends that produce values but only one receiving end that consumes those values. 
+//The mpsc::channel function returns a tuple, the first element of which is the sending end--the transmitter--and the second element is the receiving end--the receiver. 
+
+//Let’s move the transmitting end into a spawned thread and have it send one string so the spawned thread is communicating with the main thread
+
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        let val = String::from("hi");
+        tx.send(val).unwrap();
+    });
+}
+
+//The spawned thread needs to own the transmitter to be able to send messages through the channel. 
+//The transmitter has a send method that takes the value we want to send. 
+//The send method returns a Result<T, E> type, 
+//so if the receiver has already been dropped and there’s nowhere to send a value, the send operation will return an error. 
+//In this example, we’re calling unwrap to panic in case of an error.
+
+//we’ll get the value from the receiver in the main thread
+
+let received = rx.recv().unwrap();              //as recv() and send() method return Result enum....we use the unwra to take out the value tha we want to get tanj
+println!("Got: {}", received);
+
+//The receiver has two useful methods: recv and try_recv
+// 1- We’re using recv, short for receive, which will block the main thread’s execution and wait until a value is sent down the channel.
+//Once a value is sent, recv will return it in a Result<T, E>. When the transmitter closes, recv will return an error to signal that no more values will be coming.
+//Once a value is sent, recv will return it in a Result<T, E>. When the transmitter closes, recv will return an error to signal that no more values will be coming.
+
+//2- The try_recv method doesn’t block, but will instead return a Result<T, E> immediately: an Ok value holding a message if one is available and an Err value if there aren’t any messages this time. 
+//Using try_recv is useful if this thread has other work to do while waiting for messages: 
+//we could write a loop that calls try_recv every so often, handles a message if one is available, and otherwise does other work for a little while until checking again.
+
+//----------------------------------------------------------------------
+
+//once the value has been sent to another thread, that thread could modify or drop it before we try to use the value again.
+
+//The send function takes ownership of its parameter, and when the value is moved, the receiver takes ownership of it. 
+//This stops us from accidentally using the value again after sending it; the ownership system checks that everything is okay.
+
+
+
+//Sending Multiple Values and Seeing the Receiver Waiting
+
+
+//The spawned thread will now send multiple messages and pause for a second between each message.
+
+let (tx, rx) = mpsc::channel();
+
+thread::spawn(move || {
+    let vals = vec![
+        String::from("hi"),
+        String::from("from"),
+        String::from("the"),
+        String::from("thread"),
+    ];
+
+    for val in vals {
+        tx.send(val).unwrap();
+        thread::sleep(Duration::from_secs(1));
+    }
+});
+
+for received in rx {
+    println!("Got: {}", received);
 }
 
 
-//this code runs but doesnt do anything
-
-//now we an use these in a number of ways
-
-//in for loop
-for val in v1_iter {
-    println!("Got: {}", val);
-}
-
-
-//Iterators handle all that logic for you, cutting down on repetitive code you could potentially mess up. 
-//Iterators give you more flexibility to use the same logic with many different kinds of sequences, 
-//not just data structures you can index into, like vectors.
-
-
-//iterator implements a trait named Iterator that is defined in the standard library.
-
-//we can also go along an Iterator using next() method for iterators
-
-//next() method is declared in Iterator trait as:
-//fn next(&mut self) -> Option<Self::Item>;
-
-//hence we see that it returns Option enum
-///if there is a value on iter.next()....we get Some(&value);
-/// else we can get None as the result
-/// for exampple lets see a test function
+/////////////////////////////////////////////////
 /// 
 /// 
-#[test]
-fn iterator_demonstration() {
-    let v1 = vec![1, 2, 3];
 
-    let mut v1_iter = v1.iter();        //we made the iterator mutable because using the next() method changes internal state of the iterator
 
-    assert_eq!(v1_iter.next(), Some(&1));
-    assert_eq!(v1_iter.next(), Some(&2));
-    assert_eq!(v1_iter.next(), Some(&3));
-    assert_eq!(v1_iter.next(), None);
+//Creating Multiple Producers by Cloning the Transmitter
+
+let tx1 = tx.clone(); //just write this and you got a new producer
+
+//now this new producer will be able to send messages using the send function
+
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+
+fn main() {
+    // --snip--
+
+    let (tx, rx) = mpsc::channel();
+
+    let tx1 = tx.clone();
+    thread::spawn(move || {
+        let vals = vec![
+            String::from("hi"),
+            String::from("from"),
+            String::from("the"),
+            String::from("thread"),
+        ];
+
+        for val in vals {
+            tx1.send(val).unwrap();
+            thread::sleep(Duration::from_secs(1));
+        }
+    });
+
+    thread::spawn(move || {
+        let vals = vec![
+            String::from("more"),
+            String::from("messages"),
+            String::from("for"),
+            String::from("you"),
+        ];
+
+        for val in vals {
+            tx.send(val).unwrap();
+            thread::sleep(Duration::from_secs(1));
+        }
+    });
+
+    for received in rx {
+        println!("Got: {}", received);
+    }
+
+    // --snip--
 }
 
-//we made the iterator mutable here as we are using next() method....
-//we didnt need to make iterator mutable while using 'for' loop becuase 'for' loop took ownershipp of the iterator and made it mutable behind the scenes
+//we call clone on the transmitter. 
+//This will give us a new transmitter we can pass to the first spawned thread. 
+//We pass the original transmitter to a second spawned thread. 
+//This gives us two threads, each sending different messages to the one receiver.
 
-//the values we get from the calls to next() are immutable refernces to values in the vector as we see in the test function
+//OUTPUT
+// Got: hi
+// Got: more
+// Got: from
+// Got: messages
+// Got: for
+// Got: the
+// Got: thread
+// Got: you
 
-//IF WE WANT THE ITERATOR TO TAKE OWNERSHIPP OF Vector v1 and return owned values....we can call into_iter() method instead of iter()...
-//IF WE WANT TO ITERATE OVER MUTABLE REFERENCES, we can call iter_mut() method instead of iter() method
+//------------------------------------------------------------------------
 
-//---------------------------------------------------------------
+//Shared- State Concurrency
 
-//METHODS THAT CONSUME ITERATOR
+//Message passing is a fine way of handling concurrency, but it’s not the only one. 
+//Another method would be for multiple threads to access the same shared data.
 
-//iterator has a method called sum().....
-//this method takes ownershipp of the iterator because it iterates through the items by repeatedly calling next() method hence consuming the iterator.
-
-
-//------------------------------------------------
-
-//METHODS THAT PRODUCE ITERATORS
-
-//map() method
-///
-/// takes a closure call on each item as items are iterated through...
-/// this method returns a new iterator that produces the modified items
-
-let v1: Vec<i32> = vec![1, 2, 3];
-
-v1.iter().map(|x| x + 1);       //using CLOSURE in iterator
-
-//this will produce an iterator which will produce items from the vector after incresing them all by 1
-//BUT it will do nothing unless it is used...BECAUSE IT IS LAZYYYY...
-//it will show this as a warning that it is doing nothing.....
-
-//though we can use collect() method to get all the data inside the iterator and store it inside a collection
+//channels in any programming language are similar to single ownership, because once you transfer a value down a channel, you should no longer use that value. 
+//Shared memory concurrency is like multiple ownership: multiple threads can access the same memory location at the same time.
 
 
-//------------------------------------------------------------
+//Using Mutexes to Allow Access to Data from One Thread at a Time
 
-//USING CLoSURES THAT CAPTURE THEIR ENVIRONMENT
+//Mutex is an abbreviation for mutual exclusion, as in, a mutex allows only one thread to access some data at any given time. 
+
+//To access the data in a mutex, a thread must first signal that it wants access by asking to acquire the mutex’s lock. 
+//The lock is a data structure that is part of the mutex that keeps track of who currently has exclusive access to the data.
+
+//Therefore, the mutex is described as guarding the data it holds via the locking system.
+
+//Mutexes have a reputation for being difficult to use because you have to remember two rules:
+
+//1 - You must attempt to acquire the lock before using the data.
+//2 - When you’re done with the data that the mutex guards, you must unlock the data so other threads can acquire the lock.
 
 
-//filter() method - filter the data according to some criteria...
-//we can have CLOSURE as an ARGUMENT inside filter() method to filter out the data....
+//---------------------------------------------------------------------------------------------------------------------
+
+// API for Mutex<T>
+
+use std::sync::Mutex;
+
+fn main() {
+    let m = Mutex::new(5);                  //created a Mutex<T> with new() function
+    {
+        let mut num = m.lock().unwrap();       //we used lock() methopd to acquire the lock in order to access the data
+        *num = 6;
+    }
+    println!("m = {:?}", m);
+}
+
+//OUTPUT
+//m = Mutex { data: 6, poisoned: false, .. }
+
+//To access the data inside the mutex, we use the lock method to acquire the lock. 
+//This call will block the current thread so it can’t do any work until it’s our turn to have the lock.
+
+//The call to lock would fail if another thread holding the lock panicked
+//In that case, no one would ever be able to get the lock, so we’ve chosen to unwrap and have this thread panic if we’re in that situation.
+
+//After we’ve acquired the lock, we can treat the return value, named num in this case, as a mutable reference to the data inside. 
+//The type of m is Mutex<i32>, not i32, so we must call lock to be able to use the i32 value. We can’t forget; the type system won’t let us access the inner i32 otherwise.
+//The type system ensures that we acquire a lock before using the value in m
+
+//Mutex<T> is a smart pointer. 
+//More accurately, the call to lock returns a smart pointer called MutexGuard, wrapped in a LockResult that we handled with the call to unwrap. 
+//The MutexGuard smart pointer implements Deref to point at our inner data; 
+//the smart pointer also has a Drop implementation that releases the lock automatically when a MutexGuard goes out of scope, which happens at the end of the inner scope. 
+//As a result, we don’t risk forgetting to release the lock and blocking the mutex from being used by other threads, because the lock release happens automatically.
+
+//After dropping the lock, we can print the mutex value and see that we were able to change the inner i32 to 6.
+//-----------------------------------------------------------------------
 
 
-//_------------------------------------------------------
+//Sharing a Mutex<T> Between Multiple Threads
 
-//ITERATORS VS LOOPS
+//lets see what happens with mutiple thread
+//we make 10 threads each thread increaasing the value by 1
 
-//iterators have slightly better performance than for loops
-//Hene we can use the iterator in cases where minute improvements in speed is necessary..
-//example....- audio decoders
+let counter = Mutex::new(0);
+let mut handles = vec![];
+
+for _ in 0..10 {
+    let handle = thread::spawn(move || {
+        let mut num = counter.lock().unwrap();
+
+        *num += 1;
+    });
+    handles.push(handle);
+}
+
+for handle in handles {
+    handle.join().unwrap();
+}
+
+println!("Result: {}", *counter.lock().unwrap());
+
+
+//gives a compile error
+
+///WHAT WE THOUGHT
+/// We create a counter variable to hold an i32 inside a Mutex<T>, as we did in Listing 16-12. Next, we create 10 threads by iterating over a range of numbers. We use thread::spawn and give all the threads the same closure: one that moves the counter into the thread, acquires a lock on the Mutex<T> by calling the lock method, and then adds 1 to the value in the mutex. When a thread finishes running its closure, num will go out of scope and release the lock so another thread can acquire it.
+///In the main thread, we collect all the join handles. Then, as we did in Listing 16-2, we call join on each handle to make sure all the threads finish. At that point, the main thread will acquire the lock and print the result of this program.
+
+//What Happened ...WHY?
+/// doesnt comppile because : 
+/// The error message states that the counter value was moved in the previous iteration of the loop. 
+/// Rust is telling us that we can’t move the ownership of lock counter into multiple threads.
+
+//The previous program failed becuae we cannot move or transfer the ownership of an outside variable into multiple threads.
+
+//LETS SOLVE:
+
+//Multiple ownership with Multiple threads
+
+//for multiple ownership what we can do is wrap our Mutex<T> inside an Rc<T>
+//then we can clone the Rc<T> before moving ownership to the thread..
+
+let counter = Rc::new(Mutex::new(0));
+let mut handles = vec![];
+
+for _ in 0..10 {
+    let counter = Rc::clone(&counter);          //before going into a thread we wrapped the counter reference into Rc<> clone
+    let handle = thread::spawn(move || {
+        let mut num = counter.lock().unwrap();
+
+        *num += 1;
+    });
+    handles.push(handle);
+}
+
+for handle in handles {
+    handle.join().unwrap();
+}
+
+println!("Result: {}", *counter.lock().unwrap());
+
+//THIS WILL NOT COMPILE AGAIN...WHY???
+//Unfortunately, Rc<T> is not safe to share across threads. 
+//When Rc<T> manages the reference count, it adds to the count for each call to clone and subtracts from the count when each clone is dropped. 
+//But it doesn’t use any concurrency primitives to make sure that changes to the count can’t be interrupted by another thread. 
+//This could lead to wrong counts—subtle bugs that could in turn lead to memory leaks or a value being dropped before we’re done with it.
+
+//LETS SOLVE FURTHER:
+
+//Atomic Reference Counting with Arc<T>   
+
+/// Arc<T> is a type like Rc<T> that is safe to use in concurrent situations.
+/// it’s an atomically reference counted type.
+/// Just need to know that atomics work like primitive types but are safe to share across threads.
+
+
+//THREAD SAFETY comes with a Performance penalty ......and so we want to use Arc<T> only when required....hence it is not include in the standard library...
+//Same is the reason for all primitive datatypes not being ATOMIC
+
+//So just change the Rc<T> in the above program into Arc<T> and you are good to go!!!!!
+
+//The program would compile with OUTPUT
+//Result: 10
+
+//---------------------------------------------------------------------------
+
+//any type T is Sync if &T (an immutable reference to T) is Send, meaning the reference can be sent safely to another thread. 
+//Similar to Send, primitive types are Sync, and types composed entirely of types that are Sync are also Sync.
+
+//The smart pointer Mutex<T> is Sync and can be used to share access with multiple threads 
+
+
+
+
+
+
+
+
+
+
 
 
 
